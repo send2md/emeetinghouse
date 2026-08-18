@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Admin — Meetinghouse{% endblock %}
+{% block content %}
+<div class="card" style="max-width:360px;margin:2rem auto;">
+  <h1>Administrator</h1>
+  <form method="post">
+    <label>Admin password</label>
+    <input type="password" name="password" required autofocus>
+    <p><input type="submit" value="Log in"></p>
+  </form>
+</div>
+{% endblock %}

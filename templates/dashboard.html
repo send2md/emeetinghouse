@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Meetinghouse{% endblock %}
+{% block content %}
+<h1>Open Topics</h1>
+{% for subsection, items in open_by_subsection.items() %}
+  <div class="card">
+    <h2>{{ subsection.value }} <a class="button secondary" style="float:right" href="{{ url_for('NewTopic', name=subsection.value|lower) }}">New Topic</a></h2>
+    {% if items %}
+      <table>
+        <tr><th>Topic</th><th>Age</th><th>Readers</th><th>Yes</th><th>Abstain</th><th>No</th></tr>
+        {% for item in items %}
+        <tr>
+          <td><a href="{{ url_for('TopicDetail', topic_id=item.topic.id) }}">{{ item.topic.title }}</a></td>
+          <td>{{ item.age|humanage }}</td>
+          <td>{{ item.readers }}</td>
+          <td>{{ item.counts[VoteChoice.YES] if item.counts else '—' }}</td>
+          <td>{{ item.counts[VoteChoice.ABSTAIN] if item.counts else '—' }}</td>
+          <td>{{ item.counts[VoteChoice.NO] if item.counts else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">No open Topics.</p>
+    {% endif %}
+  </div>
+{% endfor %}
+{% endblock %}

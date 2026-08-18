@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Log in — Meetinghouse{% endblock %}
+{% block content %}
+<div class="card" style="max-width:360px;margin:2rem auto;">
+  <h1>Log in</h1>
+  <form method="post">
+    <label>Username</label>
+    <input type="text" name="username" required autofocus>
+    <label>Password</label>
+    <input type="password" name="password" required>
+    <p><input type="submit" value="Log in"></p>
+  </form>
+  <p class="muted">New Participants are registered by an administrator once your
+    signed participation form has arrived. See <a href="{{ url_for('AdminLogin') }}">admin</a>.</p>
+</div>
+{% endblock %}

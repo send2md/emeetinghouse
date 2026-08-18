@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Admin — Meetinghouse{% endblock %}
+{% block content %}
+<h1>Administrator <a class="button secondary" style="float:right" href="{{ url_for('AdminLogout') }}">Log out</a></h1>
+
+<div class="card">
+  <h3>Register a new Participant</h3>
+  <p class="muted">Use this once their signed participation form has arrived by mail.</p>
+  <form method="post" action="{{ url_for('AdminRegister') }}">
+    <label>Full name</label>
+    <input type="text" name="name" required>
+    <label>Login username</label>
+    <input type="text" name="username" required>
+    <label>Initial password</label>
+    <input type="text" name="password" required>
+    <label>Scan reference (optional — filename/path of the scanned form)</label>
+    <input type="text" name="scan_ref">
+    <p><input type="submit" value="Register"></p>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Record a fresh signed form</h3>
+  <form method="post" action="{{ url_for('AdminSignForm') }}">
+    <label>Participant</label>
+    <select name="participant_id" required>
+      {% for p in participants %}
+        <option value="{{ p.id }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <label>Scan reference (optional)</label>
+    <input type="text" name="scan_ref">
+    <p><input type="submit" value="Record today's date as signed"></p>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Scheduler</h3>
+  <form method="post" action="{{ url_for('AdminTick') }}">
+    <p><button type="submit">Run Tick() now</button></p>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Participants</h3>
+  <table>
+    <tr><th>Name</th><th>Form current?</th><th>Dismissed?</th></tr>
+    {% for p in participants %}
+    <tr>
+      <td>{{ p.name }}</td>
+      <td>{{ "yes" if p.IsParticipant(now) else "EXPIRED" }}</td>
+      <td>{{ "until " + p.CurrentDismissal(now).end|fmt if p.IsDismissed(now) else "no" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h3>Current Rules</h3>
+  <table>
+    <tr><th>Subsection</th><th>Quiet time</th><th>Min life</th><th>Voter fraction</th><th>Approval fraction</th></tr>
+    {% for s, r in rules.items() %}
+    <tr>
+      <td>{{ s.value }}</td>
+      <td>{{ r.quiet_time|humanage }}</td>
+      <td>{{ r.min_life|humanage }}</td>
+      <td>{{ "%.0f"|format(r.voter_fraction*100) }}%</td>
+      <td>{{ "%.1f"|format(r.approval_fraction*100) }}%</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

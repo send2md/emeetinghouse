@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Meetinghouse{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site">
+    <span class="brand">🕊 Meetinghouse</span>
+    {% if current_participant %}
+    <nav>
+      <a href="{{ url_for('Dashboard') }}">Dashboard</a>
+      <a href="{{ url_for('SubsectionView', name='forum') }}">Forum</a>
+      <a href="{{ url_for('SubsectionView', name='rules') }}">Rules</a>
+      <a href="{{ url_for('SubsectionView', name='jury') }}">Jury</a>
+      <a href="{{ url_for('Archive') }}">Archive</a>
+      <a href="{{ url_for('Summary') }}">Daily Summary</a>
+    </nav>
+    {% endif %}
+    <span class="spacer"></span>
+    {% if current_participant %}
+      <span class="who">{{ current_participant.name }}</span>
+      <a class="button secondary" href="{{ url_for('Logout') }}">Log out</a>
+    {% else %}
+      <a class="button" href="{{ url_for('Login') }}">Log in</a>
+    {% endif %}
+  </header>
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

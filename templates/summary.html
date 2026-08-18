@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Daily Summary — Meetinghouse{% endblock %}
+{% block content %}
+<h1>Daily Summary — {{ summary.date }}</h1>
+
+<div class="card">
+  <h3>Open Topics</h3>
+  {% if not summary.open %}<p class="muted">None.</p>{% endif %}
+  {% for item in summary.open %}
+    <p>
+      <a href="{{ url_for('TopicDetail', topic_id=item.topic_id) }}">{{ item.title }}</a>
+      <span class="muted">({{ item.subsection }}, {{ item.age|humanage }} old)</span>
+      — Yes {{ item.votes.Yes }} · Abstain {{ item.votes.Abstain }} · No {{ item.votes.No }}
+    </p>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h3>Closed Today</h3>
+  {% if not summary.closed_today %}<p class="muted">None.</p>{% endif %}
+  {% for item in summary.closed_today %}
+    <p>
+      <a href="{{ url_for('TopicDetail', topic_id=item.topic_id) }}">{{ item.title }}</a>
+      <span class="muted">({{ item.subsection }})</span>
+      — <span class="badge {{ item.result|lower }}">{{ item.result }}</span>
+    </p>
+  {% endfor %}
+</div>
+{% endblock %}

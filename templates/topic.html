@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ topic.title }} — Meetinghouse{% endblock %}
+{% block content %}
+<h1>{{ topic.title }}
+  {% if topic.closed %}
+    <span class="badge {{ topic.result.value|lower }}">{{ topic.result.value }}</span>
+  {% else %}
+    <span class="badge open">OPEN</span>
+  {% endif %}
+</h1>
+<p class="muted">{{ topic.subsection.value }} · opened {{ topic.created_at|fmt }} by {{ participant_name(topic.author_id) }} · {{ readers|length }} reader(s)</p>
+
+{% if topic.description %}<div class="card">{{ topic.description }}</div>{% endif %}
+
+{% if topic.HasPoll() %}
+<div class="card">
+  <h3>{{ topic.poll_question }}</h3>
+  <p class="counts">
+    <span class="badge yes">Yes {{ counts[VoteChoice.YES] }}</span>
+    <span class="badge abstain">Abstain {{ counts[VoteChoice.ABSTAIN] }}</span>
+    <span class="badge no">No {{ counts[VoteChoice.NO] }}</span>
+  </p>
+
+  {% if not topic.closed %}
+    <form method="post" action="{{ url_for('CastVote', topic_id=topic.id) }}">
+      <label>Your vote{% if my_vote %} (currently {{ my_vote.choice.value }} — casting again replaces it){% endif %}</label>
+      <select name="choice" required>
+        <option value="Yes" {% if my_vote and my_vote.choice.value=="Yes" %}selected{% endif %}>Yes</option>
+        <option value="Abstain" {% if my_vote and my_vote.choice.value=="Abstain" %}selected{% endif %}>Abstain</option>
+        <option value="No" {% if my_vote and my_vote.choice.value=="No" %}selected{% endif %}>No</option>
+      </select>
+      <label>Comment (required — why you're voting this way)</label>
+      <textarea name="comment" required>{% if my_vote %}{{ my_vote.comment }}{% endif %}</textarea>
+      <p>
+        <input type="submit" value="{% if my_vote %}Re-vote{% else %}Vote{% endif %}">
+        {% if my_vote %}
+        <form class="inline" method="post" action="{{ url_for('Revoke', topic_id=topic.id) }}">
+          <button class="danger" type="submit">Revoke my vote</button>
+        </form>
+        {% endif %}
+      </p>
+    </form>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Comments &amp; Votes</h3>
+  {% if not comments %}<p class="muted">None yet.</p>{% endif %}
+  {% for c in comments %}
+    <div class="comment">
+      <div class="meta">
+        {{ participant_name(c.participant_id) }} ·
+        <span class="badge {{ c.choice.value|lower }}">{{ c.choice.value }}</span>
+        {{ c.timestamp|fmt }}
+        {% if c.revoked %}<span class="badge revoked">revoked</span>{% endif %}
+        {% if c.participant_id in dismissed_ids %}<span class="badge dismissed">dismissed</span>{% endif %}
+      </div>
+      {% if c.revoked or c.participant_id in dismissed_ids %}
+        <details><summary>show comment</summary>{{ c.comment }}</details>
+      {% else %}
+        {{ c.comment }}
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

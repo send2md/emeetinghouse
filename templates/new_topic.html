@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}New Topic — {{ subsection.value }}{% endblock %}
+{% block content %}
+<h1>New {{ subsection.value }} Topic</h1>
+<div class="card">
+  <form method="post">
+    {% if subsection.value == "Jury" %}
+      <label>Participant this concerns</label>
+      <select name="target_participant_id" required>
+        {% for p in participants %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="muted">The Topic title and Poll ("Do we dismiss them?") are set automatically.</p>
+      <label>Description (optional — why you're raising this)</label>
+      <textarea name="description"></textarea>
+    {% else %}
+      <label>Title</label>
+      <input type="text" name="title" required>
+      <label>Description (optional)</label>
+      <textarea name="description"></textarea>
+
+      {% if subsection.value == "Rules" %}
+        <label>Which subsection does this Rule change address?</label>
+        <select name="target_subsection" required>
+          {% for s in Subsection %}
+            <option value="{{ s.value }}">{{ s.value }}</option>
+          {% endfor %}
+        </select>
+        <label>Poll question</label>
+        <input type="text" name="poll_question" required value="Adopt this Rule change?">
+
+        <p class="muted">Proposed values — leave any field blank to keep it unchanged. All fields blank means this Topic is discussion-only (no Rule change if it passes).</p>
+        <label>Quiet time (weeks)</label>
+        <input type="number" step="0.1" name="quiet_time_weeks">
+        <label>Minimum life (weeks)</label>
+        <input type="number" step="0.1" name="min_life_weeks">
+        <label>Voters / Readers must be ≥ (0–1)</label>
+        <input type="number" step="0.01" min="0" max="1" name="voter_fraction">
+        <label>(Yes+Abstain) / (Yes+Abstain+No) must be ≥ (0–1)</label>
+        <input type="number" step="0.01" min="0" max="1" name="approval_fraction">
+      {% else %}
+        <label>Poll question (optional — leave blank for a discussion-only Topic)</label>
+        <input type="text" name="poll_question">
+      {% endif %}
+    {% endif %}
+    <p><input type="submit" value="Create Topic"></p>
+  </form>
+</div>
+{% endblock %}

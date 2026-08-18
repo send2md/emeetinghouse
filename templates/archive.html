@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Archive — Meetinghouse{% endblock %}
+{% block content %}
+<h1>Archive</h1>
+<div class="card">
+  <form method="get">
+    <label>Search Topics, descriptions, Poll questions, and comments</label>
+    <input type="text" name="q" value="{{ query }}" autofocus>
+    <p><input type="submit" value="Search"></p>
+  </form>
+</div>
+{% if query %}
+  <div class="card">
+    <h3>{{ results|length }} result(s) for "{{ query }}"</h3>
+    <table>
+      <tr><th>Topic</th><th>Subsection</th><th>Status</th></tr>
+      {% for topic in results %}
+      <tr>
+        <td><a href="{{ url_for('TopicDetail', topic_id=topic.id) }}">{{ topic.title }}</a></td>
+        <td>{{ topic.subsection.value }}</td>
+        <td>
+          {% if topic.closed %}
+            <span class="badge {{ topic.result.value|lower }}">{{ topic.result.value }}</span>
+          {% else %}
+            <span class="badge open">OPEN</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

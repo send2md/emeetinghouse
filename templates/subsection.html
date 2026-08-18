@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ subsection.value }} — Meetinghouse{% endblock %}
+{% block content %}
+<h1>{{ subsection.value }}
+  <a class="button" style="float:right" href="{{ url_for('NewTopic', name=subsection.value|lower) }}">New Topic</a>
+</h1>
+<p class="muted">
+  Quiet time {{ rule.quiet_time|humanage }} · minimum life {{ rule.min_life|humanage }} ·
+  needs Voters/Readers ≥ {{ "%.0f"|format(rule.voter_fraction*100) }}% ·
+  needs (Yes+Abstain)/(Yes+Abstain+No) ≥ {{ "%.1f"|format(rule.approval_fraction*100) }}%
+</p>
+<div class="card">
+  {% if rows %}
+    <table>
+      <tr><th>Topic</th><th>Status</th><th>Yes</th><th>Abstain</th><th>No</th></tr>
+      {% for row in rows %}
+      <tr>
+        <td><a href="{{ url_for('TopicDetail', topic_id=row.topic.id) }}">{{ row.topic.title }}</a></td>
+        <td>
+          {% if row.topic.closed %}
+            <span class="badge {{ row.topic.result.value|lower }}">{{ row.topic.result.value }}</span>
+          {% else %}
+            <span class="badge open">OPEN</span>
+          {% endif %}
+        </td>
+        <td>{{ row.counts[VoteChoice.YES] if row.counts else '—' }}</td>
+        <td>{{ row.counts[VoteChoice.ABSTAIN] if row.counts else '—' }}</td>
+        <td>{{ row.counts[VoteChoice.NO] if row.counts else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">No Topics yet in {{ subsection.value }}.</p>
+  {% endif %}
+</div>
+{% endblock %}
