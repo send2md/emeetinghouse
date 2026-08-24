@@ -11,7 +11,7 @@ Do not commit the filled-in config.py to git.
 import os
 
 # Outside ~/html — the SQLite file must never be reachable over HTTP.
-os.environ["MEETINGHOUSE_DB"] = "/home/USERNAME/emeetinghouse/data/meetinghouse.db"
+os.environ["MEETINGHOUSE_DB"] = "/home/USERNAME/emeetinghouse/data/emeetinghouse.db"
 
 # Generate with: python3 -c "import secrets; print(secrets.token_hex(32))"
 os.environ["MEETINGHOUSE_SECRET_KEY"] = "REPLACE-ME"

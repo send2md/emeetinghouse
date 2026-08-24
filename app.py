@@ -24,7 +24,7 @@ from emeetinghouse import (
     VoteChoice,
 )
 
-DB_PATH = os.environ.get("MEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "meetinghouse.db"))
+DB_PATH = os.environ.get("MEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "emeetinghouse.db"))
 ADMIN_PASSWORD = os.environ.get("MEETINGHOUSE_ADMIN_PASSWORD", "admin")
 TICK_INTERVAL_SECONDS = int(os.environ.get("MEETINGHOUSE_TICK_SECONDS", "300"))
 

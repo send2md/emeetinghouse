@@ -25,7 +25,7 @@ except ImportError:
 import persistence
 import tick_runner
 
-DB_PATH = os.environ.get("MEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "meetinghouse.db"))
+DB_PATH = os.environ.get("MEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "emeetinghouse.db"))
 
 
 def main():
