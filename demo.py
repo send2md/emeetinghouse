@@ -7,7 +7,7 @@ Run: python3 demo.py, or ./demo.py if this file is executable.
 
 import datetime as dt
 
-from meetinghouse import Meetinghouse, RuleConfig, Subsection, VoteChoice
+from emeetinghouse import Meetinghouse, RuleConfig, Subsection, VoteChoice
 
 START = dt.datetime(2026, 1, 1, 9, 0, 0)
 

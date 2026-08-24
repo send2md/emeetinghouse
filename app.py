@@ -1,6 +1,6 @@
 """Web front end for the Meetinghouse engine.
 
-This module owns everything meetinghouse.py deliberately does not:
+This module owns everything emeetinghouse.py deliberately does not:
 wall-clock time, HTTP, sessions/login, and calling into persistence.py
 after each mutation. The single in-process `house` is the same
 Meetinghouse object the engine's tests exercise; this file just feeds
@@ -18,7 +18,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import persistence
 import tick_runner
-from meetinghouse import (
+from emeetinghouse import (
     MeetinghouseError,
     Subsection,
     VoteChoice,
@@ -251,7 +251,7 @@ def _BuildProposedRule(current, form):
             return fallback
         return float(raw)
 
-    from meetinghouse import RuleConfig
+    from emeetinghouse import RuleConfig
 
     quiet_time = _weeks("quiet_time_weeks", current.quiet_time)
     min_life = _weeks("min_life_weeks", current.min_life)

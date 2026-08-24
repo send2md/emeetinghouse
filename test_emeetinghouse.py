@@ -1,13 +1,13 @@
-"""Tests for meetinghouse.py, one per Rule in the design spec.
+"""Tests for emeetinghouse.py, one per Rule in the design spec.
 
-Run with `python -m pytest test_meetinghouse.py -v`, or run this file
+Run with `python -m pytest test_emeetinghouse.py -v`, or run this file
 directly and it will execute every test itself, with no dependency on
 pytest being installed.
 """
 
 import datetime as dt
 
-from meetinghouse import (
+from emeetinghouse import (
     Dismissal,
     InvalidTopic,
     Meetinghouse,

@@ -10,7 +10,7 @@ control and a thread inside it can't be relied on to keep running.
 from __future__ import annotations
 
 import persistence
-from meetinghouse import PollResult, Subsection
+from emeetinghouse import PollResult, Subsection
 
 
 def RunTick(house, conn, now):

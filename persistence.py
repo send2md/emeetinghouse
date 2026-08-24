@@ -1,6 +1,6 @@
 """SQLite persistence for the Meetinghouse engine.
 
-meetinghouse.py is a pure, in-memory domain engine by design (see its
+emeetinghouse.py is a pure, in-memory domain engine by design (see its
 module docstring): every action takes an explicit `now` and nothing in
 it touches a clock, a disk, or a network. This module is the "someone
 else's job" the engine docstring defers to: it snapshots each mutated
@@ -20,7 +20,7 @@ import json
 import sqlite3
 from typing import Optional
 
-from meetinghouse import (
+from emeetinghouse import (
     Dismissal,
     Meetinghouse,
     Participant,
