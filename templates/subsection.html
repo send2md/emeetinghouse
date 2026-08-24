@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ subsection.value }} — Meetinghouse{% endblock %}
+{% block title %}{{ subsection.value }} — Emeetinghouse{% endblock %}
 {% block content %}
 <h1>{{ subsection.value }}
   <a class="button" style="float:right" href="{{ url_for('NewTopic', name=subsection.value|lower) }}">New Topic</a>
