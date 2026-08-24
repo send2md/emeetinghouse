@@ -1,1 +1,2 @@
 Flask>=3.0
+flup>=1.0.3  # only needed for TigerTech (or other FastCGI) deployment; see deploy/tigertech/

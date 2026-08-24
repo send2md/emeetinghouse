@@ -17,9 +17,9 @@ from flask import Flask, abort, flash, g, redirect, render_template, request, se
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import persistence
+import tick_runner
 from meetinghouse import (
     MeetinghouseError,
-    PollResult,
     Subsection,
     VoteChoice,
 )
@@ -50,17 +50,7 @@ def FlushNewEvents(prev_len):
 def RunTick():
     """Close every eligible Topic/Poll and persist the resulting changes."""
     with LOCK:
-        prev_len = len(house.event_log)
-        closed = house.Tick(Now())
-        for topic in closed:
-            persistence.SaveTopic(conn, topic)
-            if topic.result is PollResult.PASSED and topic.subsection is Subsection.RULES and topic.target_subsection:
-                persistence.SaveRules(conn, topic.target_subsection, house.current_rules[topic.target_subsection])
-            if topic.result is PollResult.PASSED and topic.subsection is Subsection.JURY:
-                participant = house.participants[topic.target_participant_id]
-                persistence.SaveParticipant(conn, participant)
-        FlushNewEvents(prev_len)
-        return closed
+        return tick_runner.RunTick(house, conn, Now())
 
 
 def SchedulerLoop():
