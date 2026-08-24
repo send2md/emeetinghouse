@@ -24,12 +24,12 @@ from emeetinghouse import (
     VoteChoice,
 )
 
-DB_PATH = os.environ.get("MEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "emeetinghouse.db"))
-ADMIN_PASSWORD = os.environ.get("MEETINGHOUSE_ADMIN_PASSWORD", "admin")
-TICK_INTERVAL_SECONDS = int(os.environ.get("MEETINGHOUSE_TICK_SECONDS", "300"))
+DB_PATH = os.environ.get("EMEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "emeetinghouse.db"))
+ADMIN_PASSWORD = os.environ.get("EMEETINGHOUSE_ADMIN_PASSWORD", "admin")
+TICK_INTERVAL_SECONDS = int(os.environ.get("EMEETINGHOUSE_TICK_SECONDS", "300"))
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("MEETINGHOUSE_SECRET_KEY", "dev-secret-change-me")
+app.secret_key = os.environ.get("EMEETINGHOUSE_SECRET_KEY", "dev-secret-change-me")
 
 LOCK = threading.Lock()
 conn = persistence.Connect(DB_PATH)
@@ -452,9 +452,9 @@ def AdminLogout():
 if __name__ == "__main__":
     if ADMIN_PASSWORD == "admin":
         app.logger.warning(
-            "MEETINGHOUSE_ADMIN_PASSWORD not set; using the insecure default 'admin'. "
+            "EMEETINGHOUSE_ADMIN_PASSWORD not set; using the insecure default 'admin'. "
             "Set it before exposing this app beyond localhost."
         )
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true" or not app.debug:
         StartScheduler()
-    app.run(debug=os.environ.get("MEETINGHOUSE_DEBUG") == "1", host=os.environ.get("MEETINGHOUSE_HOST", "127.0.0.1"), port=int(os.environ.get("MEETINGHOUSE_PORT", "5000")))
+    app.run(debug=os.environ.get("EMEETINGHOUSE_DEBUG") == "1", host=os.environ.get("EMEETINGHOUSE_HOST", "127.0.0.1"), port=int(os.environ.get("EMEETINGHOUSE_PORT", "5000")))
