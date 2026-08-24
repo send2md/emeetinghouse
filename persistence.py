@@ -5,7 +5,7 @@ module docstring): every action takes an explicit `now` and nothing in
 it touches a clock, a disk, or a network. This module is the "someone
 else's job" the engine docstring defers to: it snapshots each mutated
 Participant/Topic to SQLite after every engine call, and can rebuild
-an equivalent in-memory Meetinghouse from those snapshots on startup.
+an equivalent in-memory Emeetinghouse from those snapshots on startup.
 
 Login credentials are a web-app concern, not a Meetinghouse domain
 concept (the real Participation form arrives by mail, not a signup
@@ -22,7 +22,7 @@ from typing import Optional
 
 from emeetinghouse import (
     Dismissal,
-    Meetinghouse,
+    Emeetinghouse,
     Participant,
     ParticipationForm,
     PollResult,
@@ -274,7 +274,7 @@ def SaveRules(conn, subsection: Subsection, rule: RuleConfig):
 
 
 def LogEvent(conn, entry: dict):
-    """Append one Meetinghouse event_log entry to the durable archive."""
+    """Append one Emeetinghouse event_log entry to the durable archive."""
     entry = dict(entry)
     kind = entry.pop("kind")
     at = entry.pop("at")
@@ -307,8 +307,8 @@ def GetCredentialsForParticipant(conn, participant_id: str) -> Optional[sqlite3.
     return conn.execute("SELECT * FROM credentials WHERE participant_id = ?", (participant_id,)).fetchone()
 
 
-def LoadHouse(conn) -> Meetinghouse:
-    """Rebuild a Meetinghouse instance from everything persisted so far."""
+def LoadHouse(conn) -> Emeetinghouse:
+    """Rebuild an Emeetinghouse instance from everything persisted so far."""
     rule_rows = conn.execute("SELECT * FROM rules").fetchall()
     rules = {
         Subsection(row["subsection"]): RuleConfig(
@@ -319,7 +319,7 @@ def LoadHouse(conn) -> Meetinghouse:
         )
         for row in rule_rows
     }
-    house = Meetinghouse(rules=rules or None)
+    house = Emeetinghouse(rules=rules or None)
 
     for row in conn.execute("SELECT * FROM participants"):
         participant = Participant(

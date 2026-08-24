@@ -57,27 +57,27 @@ class PollResult(Enum):
     FAILED = "FAILED"
 
 
-class MeetinghouseError(Exception):
+class EmeetinghouseError(Exception):
     """Base class for every domain error this module raises."""
 
 
-class NotAParticipant(MeetinghouseError):
+class NotAParticipant(EmeetinghouseError):
     """Raised when a person without a current, signed form tries to act."""
 
 
-class ParticipantDismissed(MeetinghouseError):
+class ParticipantDismissed(EmeetinghouseError):
     """Raised when a currently-dismissed Participant tries to act."""
 
 
-class TopicClosed(MeetinghouseError):
+class TopicClosed(EmeetinghouseError):
     """Raised when an action targets a Topic that has already closed."""
 
 
-class NoPollOnTopic(MeetinghouseError):
+class NoPollOnTopic(EmeetinghouseError):
     """Raised when a Vote is attempted on a Topic that carries no Poll."""
 
 
-class InvalidTopic(MeetinghouseError):
+class InvalidTopic(EmeetinghouseError):
     """Raised when a Topic is created without the fields its subsection requires."""
 
 
@@ -264,7 +264,7 @@ class Topic:
         return results
 
 
-class Meetinghouse:
+class Emeetinghouse:
     """The engine coordinating Participants, Topics, Polls, and Rules."""
 
     def __init__(self, rules=None):

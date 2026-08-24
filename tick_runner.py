@@ -1,4 +1,4 @@
-"""The close-and-persist flow behind Meetinghouse.Tick().
+"""The close-and-persist flow behind Emeetinghouse.Tick().
 
 Factored out of app.py so it can run two ways in production: inside
 the Flask process on hosts that can keep a background thread alive,

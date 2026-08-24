@@ -3,7 +3,7 @@
 This module owns everything emeetinghouse.py deliberately does not:
 wall-clock time, HTTP, sessions/login, and calling into persistence.py
 after each mutation. The single in-process `house` is the same
-Meetinghouse object the engine's tests exercise; this file just feeds
+Emeetinghouse object the engine's tests exercise; this file just feeds
 it real time and real people, and keeps SQLite in sync.
 """
 
@@ -19,7 +19,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import persistence
 import tick_runner
 from emeetinghouse import (
-    MeetinghouseError,
+    EmeetinghouseError,
     Subsection,
     VoteChoice,
 )
@@ -229,7 +229,7 @@ def NewTopic(name):
                 )
                 persistence.SaveTopic(conn, topic)
                 FlushNewEvents(prev_len)
-        except MeetinghouseError as exc:
+        except EmeetinghouseError as exc:
             flash(str(exc))
             return render_template("new_topic.html", subsection=subsection, participants=other_participants)
 
@@ -285,7 +285,7 @@ def TopicDetail(topic_id):
             try:
                 house.MarkRead(topic_id, g.participant.id, now)
                 persistence.SaveTopic(conn, topic)
-            except MeetinghouseError:
+            except EmeetinghouseError:
                 pass
 
     comments = []
@@ -330,7 +330,7 @@ def CastVote(topic_id):
             house.CastVote(topic_id, g.participant.id, choice, comment, Now())
             persistence.SaveTopic(conn, topic)
             FlushNewEvents(prev_len)
-    except MeetinghouseError as exc:
+    except EmeetinghouseError as exc:
         flash(str(exc))
     return redirect(url_for("TopicDetail", topic_id=topic_id))
 
@@ -347,7 +347,7 @@ def Revoke(topic_id):
             house.RevokeVote(topic_id, g.participant.id, Now())
             persistence.SaveTopic(conn, topic)
             FlushNewEvents(prev_len)
-    except MeetinghouseError as exc:
+    except EmeetinghouseError as exc:
         flash(str(exc))
     return redirect(url_for("TopicDetail", topic_id=topic_id))
 

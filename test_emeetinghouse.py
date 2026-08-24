@@ -10,7 +10,7 @@ import datetime as dt
 from emeetinghouse import (
     Dismissal,
     InvalidTopic,
-    Meetinghouse,
+    Emeetinghouse,
     NotAParticipant,
     ParticipantDismissed,
     PollResult,
@@ -28,8 +28,8 @@ def Days(count):
 
 
 def CreateHouseWithParticipants(count=8, now=START):
-    """Build a Meetinghouse with `count` Participants, each freshly signed."""
-    house = Meetinghouse()
+    """Build an Emeetinghouse with `count` Participants, each freshly signed."""
+    house = Emeetinghouse()
     people = [house.RegisterParticipant(f"Participant {i}") for i in range(count)]
     for person in people:
         person.SignForm(signed_date=now.date() - Days(1))
@@ -37,7 +37,7 @@ def CreateHouseWithParticipants(count=8, now=START):
 
 
 def test_form_expires_after_a_year():
-    house = Meetinghouse()
+    house = Emeetinghouse()
     alice = house.RegisterParticipant("Alice")
     alice.SignForm(signed_date=START.date())
     assert alice.IsParticipant(START + Days(300))
@@ -45,7 +45,7 @@ def test_form_expires_after_a_year():
 
 
 def test_cannot_act_without_current_form():
-    house = Meetinghouse()
+    house = Emeetinghouse()
     alice = house.RegisterParticipant("Alice")
     try:
         house.CreateTopic(alice.id, Subsection.FORUM, "Buy new chairs", START)
