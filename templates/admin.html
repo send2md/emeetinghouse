@@ -5,14 +5,12 @@
 
 <div class="card">
   <h3>Register a new Participant</h3>
-  <p class="muted">Use this once their signed participation form has arrived by mail.</p>
+  <p class="muted">Use this once their signed participation form has arrived by mail.
+    You'll get a one-time setup link to send them — they pick their own username and
+    password on it, so you never see or choose it for them.</p>
   <form method="post" action="{{ url_for('AdminRegister') }}">
     <label>Full name</label>
     <input type="text" name="name" required>
-    <label>Login username</label>
-    <input type="text" name="username" required>
-    <label>Initial password</label>
-    <input type="text" name="password" required>
     <label>Scan reference (optional — filename/path of the scanned form)</label>
     <input type="text" name="scan_ref">
     <p><input type="submit" value="Register"></p>
@@ -44,12 +42,23 @@
 <div class="card">
   <h3>Participants</h3>
   <table>
-    <tr><th>Name</th><th>Form current?</th><th>Dismissed?</th></tr>
+    <tr><th>Name</th><th>Form current?</th><th>Dismissed?</th><th>Login</th></tr>
     {% for p in participants %}
     <tr>
       <td>{{ p.name }}</td>
       <td>{{ "yes" if p.IsParticipant(now) else "EXPIRED" }}</td>
       <td>{{ "until " + p.CurrentDismissal(now).end|fmt if p.IsDismissed(now) else "no" }}</td>
+      <td>
+        {% if has_credentials[p.id] %}
+          set up
+        {% else %}
+          not set up
+          <form method="post" action="{{ url_for('AdminInvite') }}" style="display:inline">
+            <input type="hidden" name="participant_id" value="{{ p.id }}">
+            <input type="submit" value="Generate setup link">
+          </form>
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table>

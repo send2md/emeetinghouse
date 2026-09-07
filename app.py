@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import secrets
+import sqlite3
 import threading
 
 from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
@@ -27,6 +29,7 @@ from emeetinghouse import (
 DB_PATH = os.environ.get("EMEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "emeetinghouse.db"))
 ADMIN_PASSWORD = os.environ.get("EMEETINGHOUSE_ADMIN_PASSWORD", "admin")
 TICK_INTERVAL_SECONDS = int(os.environ.get("EMEETINGHOUSE_TICK_SECONDS", "300"))
+INVITE_LIFETIME = dt.timedelta(days=int(os.environ.get("EMEETINGHOUSE_INVITE_DAYS", "7")))
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("EMEETINGHOUSE_SECRET_KEY", "dev-secret-change-me")
@@ -159,6 +162,53 @@ def Login():
 def Logout():
     session.pop("participant_id", None)
     return redirect(url_for("Login"))
+
+
+@app.route("/register/<token>", methods=["GET", "POST"])
+def SelfRegister(token):
+    """Where a Participant chooses their own username and password.
+
+    The admin never sees either: they only hand over `token`, minted by
+    AdminRegister/AdminInvite once the signed form is on file. Reaching
+    this page with a valid token is treated as proof enough of who the
+    Participant is, the same trust the admin previously placed in the
+    username/password they typed on the Participant's behalf.
+    """
+    invite = persistence.GetInvite(conn, token)
+    if invite is None:
+        flash("This setup link is invalid or has already been used.")
+        return redirect(url_for("Login"))
+    if Now() - dt.datetime.fromisoformat(invite["created_at"]) > INVITE_LIFETIME:
+        persistence.DeleteInvite(conn, token)
+        flash("This setup link has expired. Ask an administrator for a new one.")
+        return redirect(url_for("Login"))
+
+    participant = house.participants.get(invite["participant_id"])
+    if participant is None:
+        persistence.DeleteInvite(conn, token)
+        flash("This setup link no longer matches a Participant.")
+        return redirect(url_for("Login"))
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if not username or len(password) < 8:
+            flash("Choose a username and a password of at least 8 characters.")
+            return render_template("self_register.html", participant=participant, token=token)
+        with LOCK:
+            try:
+                persistence.SetCredentials(
+                    conn, participant.id, username, generate_password_hash(password, method="pbkdf2:sha256")
+                )
+            except sqlite3.IntegrityError:
+                flash("That username is already taken. Please choose another.")
+                return render_template("self_register.html", participant=participant, token=token)
+            persistence.DeleteInvite(conn, token)
+        session["participant_id"] = participant.id
+        flash(f"Welcome, {participant.name}. Your login is ready.")
+        return redirect(url_for("Dashboard"))
+
+    return render_template("self_register.html", participant=participant, token=token)
 
 
 @app.route("/subsection/<name>")
@@ -388,7 +438,25 @@ def Admin():
         return guard
     now = Now()
     participants = sorted(house.participants.values(), key=lambda p: p.name)
-    return render_template("admin.html", participants=participants, now=now, rules=house.current_rules)
+    has_credentials = {
+        p.id: persistence.GetCredentialsForParticipant(conn, p.id) is not None for p in participants
+    }
+    return render_template(
+        "admin.html", participants=participants, now=now, rules=house.current_rules, has_credentials=has_credentials
+    )
+
+
+def _IssueInvite(participant_id):
+    """Mint a fresh one-time setup link for `participant_id` and flash it.
+
+    Replaces any earlier, still-unused link for the same Participant so
+    only the most recently issued one works.
+    """
+    persistence.DeleteInvitesForParticipant(conn, participant_id)
+    token = secrets.token_urlsafe(24)
+    persistence.CreateInvite(conn, participant_id, token, Now())
+    link = url_for("SelfRegister", token=token, _external=True)
+    flash(f"Setup link (send it to them; it works once): {link}")
 
 
 @app.route("/admin/register", methods=["POST"])
@@ -397,21 +465,36 @@ def AdminRegister():
     if guard:
         return guard
     name = request.form.get("name", "").strip()
-    username = request.form.get("username", "").strip()
-    password = request.form.get("password", "").strip()
     scan_ref = request.form.get("scan_ref", "").strip()
-    if not (name and username and password):
-        flash("Name, username, and password are all required.")
+    if not name:
+        flash("Name is required.")
         return redirect(url_for("Admin"))
 
     with LOCK:
         participant = house.RegisterParticipant(name)
         participant.SignForm(signed_date=Now().date(), scan_ref=scan_ref)
         persistence.SaveParticipant(conn, participant)
-        persistence.SetCredentials(
-            conn, participant.id, username, generate_password_hash(password, method="pbkdf2:sha256")
-        )
-    flash(f"Registered {name} with a signed form dated today.")
+        flash(f"Registered {name} with a signed form dated today.")
+        _IssueInvite(participant.id)
+    return redirect(url_for("Admin"))
+
+
+@app.route("/admin/invite", methods=["POST"])
+def AdminInvite():
+    guard = RequireAdmin()
+    if guard:
+        return guard
+    participant_id = request.form.get("participant_id")
+    participant = house.participants.get(participant_id)
+    if participant is None:
+        flash("Unknown Participant.")
+        return redirect(url_for("Admin"))
+    if persistence.GetCredentialsForParticipant(conn, participant_id) is not None:
+        flash(f"{participant.name} already has a login; this doesn't reset it.")
+        return redirect(url_for("Admin"))
+
+    with LOCK:
+        _IssueInvite(participant_id)
     return redirect(url_for("Admin"))
 
 

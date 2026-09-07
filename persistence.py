@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS credentials (
     password_hash TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY,
+    participant_id TEXT NOT NULL REFERENCES participants(id),
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rules (
     subsection TEXT PRIMARY KEY,
     quiet_time_seconds REAL NOT NULL,
@@ -305,6 +311,34 @@ def GetCredentialsByUsername(conn, username: str) -> Optional[sqlite3.Row]:
 
 def GetCredentialsForParticipant(conn, participant_id: str) -> Optional[sqlite3.Row]:
     return conn.execute("SELECT * FROM credentials WHERE participant_id = ?", (participant_id,)).fetchone()
+
+
+def CreateInvite(conn, participant_id: str, token: str, created_at: dt.datetime):
+    """Record a one-time self-registration link for a Participant with no credentials yet.
+
+    The admin hands `token` to the Participant (by the same out-of-band
+    channel their signed form arrived through); it lets them pick their
+    own username and password without the admin ever seeing it.
+    """
+    conn.execute(
+        "INSERT INTO invites (token, participant_id, created_at) VALUES (?, ?, ?)",
+        (token, participant_id, _Iso(created_at)),
+    )
+    conn.commit()
+
+
+def GetInvite(conn, token: str) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM invites WHERE token = ?", (token,)).fetchone()
+
+
+def DeleteInvite(conn, token: str):
+    conn.execute("DELETE FROM invites WHERE token = ?", (token,))
+    conn.commit()
+
+
+def DeleteInvitesForParticipant(conn, participant_id: str):
+    conn.execute("DELETE FROM invites WHERE participant_id = ?", (participant_id,))
+    conn.commit()
 
 
 def LoadHouse(conn) -> Emeetinghouse:
