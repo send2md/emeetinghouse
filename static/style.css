@@ -99,3 +99,8 @@ textarea { min-height: 5rem; }
 
 .muted { color: var(--muted); }
 .counts span { margin-right: 0.75rem; }
+
+@media print {
+  header.site, .flashes, .no-print { display: none; }
+  main { padding: 0; }
+}

@@ -4,17 +4,9 @@
 <h1>Administrator <a class="button secondary" style="float:right" href="{{ url_for('AdminLogout') }}">Log out</a></h1>
 
 <div class="card">
-  <h3>Register a new Participant</h3>
-  <p class="muted">Use this once their signed participation form has arrived by mail.
-    You'll get a one-time setup link to send them — they pick their own username and
-    password on it, so you never see or choose it for them.</p>
-  <form method="post" action="{{ url_for('AdminRegister') }}">
-    <label>Full name</label>
-    <input type="text" name="name" required>
-    <label>Scan reference (optional — filename/path of the scanned form)</label>
-    <input type="text" name="scan_ref">
-    <p><input type="submit" value="Register"></p>
-  </form>
+  <p class="muted">New Participants register themselves at the <a href="{{ url_for('Login') }}">login page</a>
+    — there's nothing for the admin to do until their printed, mailed-in form arrives to
+    cross-check against what they submitted (see each Participant's Profile link below).</p>
 </div>
 
 <div class="card">
@@ -42,23 +34,13 @@
 <div class="card">
   <h3>Participants</h3>
   <table>
-    <tr><th>Name</th><th>Form current?</th><th>Dismissed?</th><th>Login</th></tr>
+    <tr><th>Name</th><th>Form current?</th><th>Dismissed?</th><th></th></tr>
     {% for p in participants %}
     <tr>
       <td>{{ p.name }}</td>
       <td>{{ "yes" if p.IsParticipant(now) else "EXPIRED" }}</td>
       <td>{{ "until " + p.CurrentDismissal(now).end|fmt if p.IsDismissed(now) else "no" }}</td>
-      <td>
-        {% if has_credentials[p.id] %}
-          set up
-        {% else %}
-          not set up
-          <form method="post" action="{{ url_for('AdminInvite') }}" style="display:inline">
-            <input type="hidden" name="participant_id" value="{{ p.id }}">
-            <input type="submit" value="Generate setup link">
-          </form>
-        {% endif %}
-      </td>
+      <td><a href="{{ url_for('AdminParticipantProfile', participant_id=p.id) }}">Profile</a></td>
     </tr>
     {% endfor %}
   </table>

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ participant.name }} — Emeetinghouse{% endblock %}
+{% block content %}
+<h1>{{ participant.name }}</h1>
+
+{% if profile %}
+<div class="card">
+  <h3>Self-registration details</h3>
+  <p class="muted">Cross-check these against whatever arrives in the mail.</p>
+  <table>
+    <tr><th>Address</th><td>{{ profile['address'] }}</td></tr>
+    <tr><th>Mother's maiden name</th><td>{{ profile['mothers_maiden_name'] }}</td></tr>
+    <tr><th>Age</th><td>{{ profile['age'] }}</td></tr>
+    <tr><th>$1.00 registration fee</th><td>{{ profile['charge_status'] }}</td></tr>
+  </table>
+  <p>
+    <img src="{{ url_for('AdminParticipantImage', participant_id=participant.id, field='photo') }}"
+         alt="Photo" style="max-width:240px;margin-right:1rem;">
+    <img src="{{ url_for('AdminParticipantImage', participant_id=participant.id, field='thumbprint') }}"
+         alt="Thumbprint" style="max-width:240px;">
+  </p>
+</div>
+{% else %}
+<p class="muted">No self-registration profile on file for this Participant.</p>
+{% endif %}
+
+<p><a href="{{ url_for('Admin') }}">Back to admin</a></p>
+{% endblock %}

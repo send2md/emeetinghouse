@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Welcome — Emeetinghouse{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;margin:2rem auto;">
+  <p class="no-print"><button onclick="window.print()">Print this page</button></p>
+
+  <h1>Welcome, {{ participant.name }}</h1>
+  <p>Your login is <strong>{{ username }}</strong>. Keep the password you chose
+    somewhere safe — nobody at Emeetinghouse, including the administrator, has it.</p>
+
+  <table>
+    <tr><th>Login</th><td>{{ username }}</td></tr>
+    <tr><th>Full name</th><td>{{ participant.name }}</td></tr>
+    <tr><th>Address</th><td>{{ address }}</td></tr>
+    <tr><th>Mother's maiden name</th><td>{{ mothers_maiden_name }}</td></tr>
+    <tr><th>Age</th><td>{{ age }}</td></tr>
+    <tr><th>$1.00 registration fee</th><td>not yet collected</td></tr>
+  </table>
+
+  <p>
+    <img src="{{ photo_data_uri }}" alt="Photo" style="max-width:200px;margin-right:1rem;">
+    <img src="{{ thumbprint_data_uri }}" alt="Thumbprint" style="max-width:200px;">
+  </p>
+
+  <p class="muted">Please print this page (with the photo and thumbprint above) and mail
+    it to:</p>
+  <address>
+    Emeetinghouse<br>
+    PO Box yyy<br>
+    San Jose, CA 95112
+  </address>
+
+  <p class="no-print"><a href="{{ url_for('Dashboard') }}">Continue to the Dashboard</a></p>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-"""Tests for the self-registration flow in app.py.
+"""Tests for the self-service login/registration flow in app.py.
 
 app.py reads its DB path and secrets from environment variables at
 import time and keeps a single in-process `house`/`conn`, so each test
@@ -9,8 +9,7 @@ sharing state between tests.
 from __future__ import annotations
 
 import importlib
-import os
-import re
+import io
 
 import pytest
 
@@ -20,7 +19,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("EMEETINGHOUSE_DB", str(tmp_path / "test.db"))
     monkeypatch.setenv("EMEETINGHOUSE_ADMIN_PASSWORD", "test-admin-password")
     monkeypatch.setenv("EMEETINGHOUSE_SECRET_KEY", "test-secret-key")
-    monkeypatch.setenv("EMEETINGHOUSE_INVITE_DAYS", "7")
+    monkeypatch.setenv("EMEETINGHOUSE_UPLOADS", str(tmp_path / "uploads"))
 
     import app as app_module
 
@@ -30,45 +29,43 @@ def client(tmp_path, monkeypatch):
         yield test_client, app_module
 
 
-def _ExtractSetupLink(html: str) -> str:
-    match = re.search(r"/register/([A-Za-z0-9_-]+)", html)
-    assert match, f"no setup link found in response:\n{html}"
-    return match.group(0)
+def _Image(name="photo.jpg"):
+    return (io.BytesIO(b"not really a jpeg, just test bytes"), name)
+
+
+def _Register(test_client, username, name="Jane Doe", password="correct horse battery", **overrides):
+    """Drive the whole /login -> /register flow for a brand-new username."""
+    test_client.post("/login", data={"username": username, "password": "whatever"})
+    data = {
+        "name": name,
+        "password": password,
+        "address": "123 Main St",
+        "mothers_maiden_name": "Smith",
+        "age": "30",
+        "thumbprint": _Image("thumb.jpg"),
+        "photo": _Image("photo.jpg"),
+    }
+    data.update(overrides)
+    return test_client.post("/register", data=data, content_type="multipart/form-data", follow_redirects=True)
 
 
 def _AdminLogin(client):
     return client.post("/admin/login", data={"password": "test-admin-password"}, follow_redirects=True)
 
 
-def test_admin_register_issues_a_link_with_no_password_field(client):
+def test_unknown_username_goes_straight_to_registration(client):
     test_client, _ = client
-    _AdminLogin(test_client)
-    resp = test_client.post("/admin/register", data={"name": "Jane Doe"}, follow_redirects=True)
-    assert b'name="password"' not in resp.data  # the admin never types one in
-    assert b"Setup link" in resp.data
-    assert b"Registered Jane Doe" in resp.data
+    resp = test_client.post("/login", data={"username": "janedoe", "password": "x"}, follow_redirects=True)
+    assert b"janedoe is your login. You are a new Participant." in resp.data
 
 
-def test_full_self_registration_flow_logs_the_participant_in(client):
+def test_full_registration_creates_a_working_login(client):
     test_client, app_module = client
-    _AdminLogin(test_client)
-    admin_resp = test_client.post("/admin/register", data={"name": "Jane Doe"}, follow_redirects=True)
-    link = _ExtractSetupLink(admin_resp.data.decode())
+    resp = _Register(test_client, "janedoe")
+    assert b"Welcome, Jane Doe" in resp.data
+    assert b"123 Main St" in resp.data  # printable confirmation shows what was submitted
+    assert b"data:image/jpeg;base64," in resp.data  # photo/thumbprint embedded for printing
 
-    # The admin's own session never submits a username/password anywhere.
-    setup_page = test_client.get(link)
-    assert b"Jane Doe" in setup_page.data
-
-    setup_resp = test_client.post(
-        link, data={"username": "janedoe", "password": "correct horse battery"}, follow_redirects=True
-    )
-    assert b"Welcome, Jane Doe" in setup_resp.data
-
-    # The link is single-use: visiting it again is rejected.
-    reused = test_client.get(link, follow_redirects=True)
-    assert b"invalid or has already been used" in reused.data
-
-    # And the chosen password actually works for a normal login.
     test_client.get("/logout")
     login_resp = test_client.post(
         "/login", data={"username": "janedoe", "password": "correct horse battery"}, follow_redirects=True
@@ -76,55 +73,74 @@ def test_full_self_registration_flow_logs_the_participant_in(client):
     assert b"Welcome, Jane Doe" in login_resp.data
 
 
-def test_self_registration_rejects_a_taken_username_without_consuming_the_link(client):
+def test_registration_requires_all_fields(client):
     test_client, _ = client
-    _AdminLogin(test_client)
-
-    first = test_client.post("/admin/register", data={"name": "Jane Doe"}, follow_redirects=True)
-    first_link = _ExtractSetupLink(first.data.decode())
-    test_client.post(first_link, data={"username": "sameuser", "password": "correct horse battery"})
-
-    second = test_client.post("/admin/register", data={"name": "John Roe"}, follow_redirects=True)
-    second_link = _ExtractSetupLink(second.data.decode())
-    clash = test_client.post(
-        second_link, data={"username": "sameuser", "password": "another good password"}, follow_redirects=True
+    test_client.post("/login", data={"username": "janedoe", "password": "x"})
+    resp = test_client.post(
+        "/register",
+        data={"name": "", "password": "short", "address": "", "mothers_maiden_name": "", "age": "not-a-number"},
+        content_type="multipart/form-data",
+        follow_redirects=True,
     )
-    assert b"already taken" in clash.data
-
-    # The link is still good — John can try again with a free username.
-    retry = test_client.post(
-        second_link, data={"username": "johnroe", "password": "another good password"}, follow_redirects=True
-    )
-    assert b"Welcome, John Roe" in retry.data
+    assert b"Full name is required" in resp.data
+    assert b"at least 8 characters" in resp.data
+    assert b"Age must be a whole number" in resp.data
+    assert b"photo" in resp.data.lower()
+    assert b"thumbprint" in resp.data.lower()
 
 
-def test_admin_invite_refuses_once_credentials_exist(client):
+def test_known_username_wrong_password_offers_retry_or_new_login(client):
+    test_client, _ = client
+    _Register(test_client, "janedoe")
+    test_client.get("/logout")
+
+    resp = test_client.post("/login", data={"username": "janedoe", "password": "nope"}, follow_redirects=True)
+    assert b"that password didn" in resp.data.lower()
+    assert b"I made a mistake, try again" in resp.data
+    assert b"This is a new login" in resp.data
+
+
+def test_claiming_a_taken_username_offers_a_free_alternative(client):
+    test_client, _ = client
+    _Register(test_client, "janedoe")
+    test_client.get("/logout")
+
+    resp = test_client.post("/login/claim", data={"username": "janedoe"}, follow_redirects=True)
+    assert b"&#34;janedoe&#34; is taken" in resp.data or b'"janedoe" is taken' in resp.data
+    assert b"janedoe2" in resp.data  # the first free suffixed alternative
+
+    start_resp = test_client.post("/register/start", data={"username": "janedoe2"}, follow_redirects=True)
+    assert b"janedoe2 is your login. You are a new Participant." in start_resp.data
+
+
+def test_register_start_loops_back_if_the_alternative_is_also_taken(client):
+    test_client, _ = client
+    _Register(test_client, "janedoe")
+    _Register(test_client, "janedoe2", name="Jane Two")
+    test_client.get("/logout")
+
+    resp = test_client.post("/register/start", data={"username": "janedoe2"}, follow_redirects=True)
+    assert b"janedoe3" in resp.data
+
+
+def test_admin_can_view_a_participants_self_registration_profile(client):
     test_client, app_module = client
+    _Register(test_client, "janedoe")
+    test_client.get("/logout")
     _AdminLogin(test_client)
-
-    resp = test_client.post("/admin/register", data={"name": "Jane Doe"}, follow_redirects=True)
-    link = _ExtractSetupLink(resp.data.decode())
-    test_client.post(link, data={"username": "janedoe", "password": "correct horse battery"})
 
     (participant_id,) = list(app_module.house.participants.keys())
-    invite_resp = test_client.post("/admin/invite", data={"participant_id": participant_id}, follow_redirects=True)
-    assert b"already has a login" in invite_resp.data
+    profile_resp = test_client.get(f"/admin/participant/{participant_id}")
+    assert b"123 Main St" in profile_resp.data
+    assert b"Smith" in profile_resp.data
+
+    photo_resp = test_client.get(f"/admin/participant/{participant_id}/photo")
+    assert photo_resp.status_code == 200
+    assert photo_resp.data == b"not really a jpeg, just test bytes"
 
 
-def test_expired_setup_link_is_rejected(client):
-    test_client, app_module = client
+def test_admin_registration_routes_are_gone(client):
+    test_client, _ = client
     _AdminLogin(test_client)
-
-    resp = test_client.post("/admin/register", data={"name": "Jane Doe"}, follow_redirects=True)
-    link = _ExtractSetupLink(resp.data.decode())
-    token = link.rsplit("/", 1)[-1]
-
-    # Back-date the invite past its lifetime instead of waiting a week.
-    stale = app_module.Now() - app_module.INVITE_LIFETIME - app_module.dt.timedelta(seconds=1)
-    app_module.conn.execute(
-        "UPDATE invites SET created_at = ? WHERE token = ?", (stale.isoformat(), token)
-    )
-    app_module.conn.commit()
-
-    expired = test_client.get(link, follow_redirects=True)
-    assert b"expired" in expired.data
+    resp = test_client.post("/admin/register", data={"name": "Someone"})
+    assert resp.status_code == 404

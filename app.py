@@ -9,13 +9,13 @@ it real time and real people, and keeps SQLite in sync.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import os
-import secrets
 import sqlite3
 import threading
 
-from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import persistence
@@ -29,10 +29,18 @@ from emeetinghouse import (
 DB_PATH = os.environ.get("EMEETINGHOUSE_DB", os.path.join(os.path.dirname(__file__), "emeetinghouse.db"))
 ADMIN_PASSWORD = os.environ.get("EMEETINGHOUSE_ADMIN_PASSWORD", "admin")
 TICK_INTERVAL_SECONDS = int(os.environ.get("EMEETINGHOUSE_TICK_SECONDS", "300"))
-INVITE_LIFETIME = dt.timedelta(days=int(os.environ.get("EMEETINGHOUSE_INVITE_DAYS", "7")))
+
+# Self-registration uploads (photo + thumbprint) live outside ~/html, next to
+# the SQLite file, so they're never web-accessible except through the
+# admin-gated AdminParticipantImage route below.
+UPLOAD_DIR = os.environ.get("EMEETINGHOUSE_UPLOADS", os.path.join(os.path.dirname(DB_PATH), "uploads"))
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg"}
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("EMEETINGHOUSE_SECRET_KEY", "dev-secret-change-me")
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # cap uploads (photo + thumbprint) at 8 MB total
 
 LOCK = threading.Lock()
 conn = persistence.Connect(DB_PATH)
@@ -68,6 +76,49 @@ def SchedulerLoop():
 def StartScheduler():
     thread = threading.Thread(target=SchedulerLoop, daemon=True)
     thread.start()
+
+
+def _AllowedImage(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def _ImageMimeType(filename):
+    """The MIME subtype for a data: URI — "jpg" isn't a registered one, "jpeg" is."""
+    ext = filename.rsplit(".", 1)[1].lower()
+    return "jpeg" if ext == "jpg" else ext
+
+
+def _SaveUpload(file_storage, participant_id, field_name):
+    """Save an uploaded photo/thumbprint under UPLOAD_DIR and return (path, raw bytes).
+
+    Returning the bytes too lets the caller embed the same image inline
+    (as a data: URI) on the one-time printable confirmation page, without
+    a second disk read.
+    """
+    ext = file_storage.filename.rsplit(".", 1)[1].lower()
+    data = file_storage.read()
+    participant_dir = os.path.join(UPLOAD_DIR, participant_id)
+    os.makedirs(participant_dir, exist_ok=True)
+    dest = os.path.join(participant_dir, f"{field_name}.{ext}")
+    with open(dest, "wb") as f:
+        f.write(data)
+    return dest, data
+
+
+def _SuggestUsername(base):
+    """The next available `root2`, `root3`, ... login for a taken username.
+
+    Strips any trailing digits from `base` first, so suggesting an
+    alternative for an already-suffixed "janedoe2" offers "janedoe3"
+    rather than piling on a second suffix ("janedoe22").
+    """
+    root = base.rstrip("0123456789") or base
+    suffix = 2
+    candidate = f"{root}{suffix}"
+    while persistence.GetCredentialsByUsername(conn, candidate) is not None:
+        suffix += 1
+        candidate = f"{root}{suffix}"
+    return candidate
 
 
 @app.template_filter("humanage")
@@ -141,20 +192,29 @@ def Dashboard():
 
 @app.route("/login", methods=["GET", "POST"])
 def Login():
+    """Log in, or fall through to self-registration for an unrecognized login.
+
+    A username that matches nobody is treated as free to claim (straight
+    to Register); a username that matches someone but the wrong password
+    was given goes to LoginRetry, which asks whether that was a typo or
+    a different person wanting the same login.
+    """
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         row = persistence.GetCredentialsByUsername(conn, username)
-        if row is None or not check_password_hash(row["password_hash"], password):
-            flash("Incorrect username or password.")
-            return render_template("login.html")
-        participant = house.participants.get(row["participant_id"])
-        if participant is None or not participant.IsParticipant(Now()):
-            flash("Your participation form has lapsed. Please send a fresh one.")
-            return render_template("login.html")
-        session["participant_id"] = participant.id
-        flash(f"Welcome, {participant.name}.")
-        return redirect(request.args.get("next") or url_for("Dashboard"))
+        if row is not None and check_password_hash(row["password_hash"], password):
+            participant = house.participants.get(row["participant_id"])
+            if participant is None or not participant.IsParticipant(Now()):
+                flash("Your participation form has lapsed. Please send a fresh one.")
+                return render_template("login.html")
+            session["participant_id"] = participant.id
+            flash(f"Welcome, {participant.name}.")
+            return redirect(request.args.get("next") or url_for("Dashboard"))
+        if row is not None:
+            return render_template("login_retry.html", username=username)
+        session["pending_username"] = username
+        return redirect(url_for("Register"))
     return render_template("login.html")
 
 
@@ -164,51 +224,117 @@ def Logout():
     return redirect(url_for("Login"))
 
 
-@app.route("/register/<token>", methods=["GET", "POST"])
-def SelfRegister(token):
-    """Where a Participant chooses their own username and password.
+@app.route("/login/claim", methods=["POST"])
+def LoginClaim():
+    """"This is a new login": `username` is taken, so offer an alternative."""
+    username = request.form.get("username", "").strip()
+    if not username:
+        return redirect(url_for("Login"))
+    return render_template("username_taken.html", taken_username=username, suggestion=_SuggestUsername(username))
 
-    The admin never sees either: they only hand over `token`, minted by
-    AdminRegister/AdminInvite once the signed form is on file. Reaching
-    this page with a valid token is treated as proof enough of who the
-    Participant is, the same trust the admin previously placed in the
-    username/password they typed on the Participant's behalf.
+
+@app.route("/register/start", methods=["POST"])
+def RegisterStart():
+    """Claim `username` for a new Participant, or bounce back if it's (now) taken."""
+    username = request.form.get("username", "").strip()
+    if not username:
+        flash("Choose a login.")
+        return redirect(url_for("Login"))
+    if persistence.GetCredentialsByUsername(conn, username) is not None:
+        return render_template("username_taken.html", taken_username=username, suggestion=_SuggestUsername(username))
+    session["pending_username"] = username
+    return redirect(url_for("Register"))
+
+
+@app.route("/register", methods=["GET", "POST"])
+def Register():
+    """The self-service "you are a new Participant" form: no admin involved.
+
+    Collects everything the printed, mailed-in form needs (see
+    register_complete.html): a name, a password the Participant chooses,
+    and the identity details a Quaker Meeting has always wanted on that
+    paper form (address, mother's maiden name, age) plus a photo and a
+    thumbprint, uploaded here and printed back out on the confirmation
+    page so the same images go in the envelope.
     """
-    invite = persistence.GetInvite(conn, token)
-    if invite is None:
-        flash("This setup link is invalid or has already been used.")
-        return redirect(url_for("Login"))
-    if Now() - dt.datetime.fromisoformat(invite["created_at"]) > INVITE_LIFETIME:
-        persistence.DeleteInvite(conn, token)
-        flash("This setup link has expired. Ask an administrator for a new one.")
-        return redirect(url_for("Login"))
-
-    participant = house.participants.get(invite["participant_id"])
-    if participant is None:
-        persistence.DeleteInvite(conn, token)
-        flash("This setup link no longer matches a Participant.")
+    username = session.get("pending_username")
+    if not username:
+        flash("Start from the login page to register.")
         return redirect(url_for("Login"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        name = request.form.get("name", "").strip()
         password = request.form.get("password", "")
-        if not username or len(password) < 8:
-            flash("Choose a username and a password of at least 8 characters.")
-            return render_template("self_register.html", participant=participant, token=token)
+        address = request.form.get("address", "").strip()
+        mothers_maiden_name = request.form.get("mothers_maiden_name", "").strip()
+        age_raw = request.form.get("age", "").strip()
+        photo = request.files.get("photo")
+        thumbprint = request.files.get("thumbprint")
+
+        errors = []
+        if not name:
+            errors.append("Full name is required.")
+        if len(password) < 8:
+            errors.append("Password must be at least 8 characters.")
+        if not address:
+            errors.append("Address is required.")
+        if not mothers_maiden_name:
+            errors.append("Mother's maiden name is required.")
+        if not age_raw.isdigit():
+            errors.append("Age must be a whole number.")
+        if not photo or not photo.filename or not _AllowedImage(photo.filename):
+            errors.append("A photo (jpg or png) is required.")
+        if not thumbprint or not thumbprint.filename or not _AllowedImage(thumbprint.filename):
+            errors.append("A thumbprint image (jpg or png) is required.")
+        if errors:
+            for error in errors:
+                flash(error)
+            return render_template("register.html", username=username)
+
+        # The availability check and the insert both happen under LOCK, so a
+        # second request racing on the same username can't slip past the
+        # check between here and SetCredentials; the UNIQUE constraint is
+        # still a backstop in case this ever runs with more than one worker.
         with LOCK:
+            if persistence.GetCredentialsByUsername(conn, username) is not None:
+                flash("That login was just taken. Please choose another.")
+                return render_template(
+                    "username_taken.html", taken_username=username, suggestion=_SuggestUsername(username)
+                )
+            participant = house.RegisterParticipant(name)
+            participant.SignForm(signed_date=Now().date())
+            persistence.SaveParticipant(conn, participant)
             try:
                 persistence.SetCredentials(
                     conn, participant.id, username, generate_password_hash(password, method="pbkdf2:sha256")
                 )
             except sqlite3.IntegrityError:
-                flash("That username is already taken. Please choose another.")
-                return render_template("self_register.html", participant=participant, token=token)
-            persistence.DeleteInvite(conn, token)
-        session["participant_id"] = participant.id
-        flash(f"Welcome, {participant.name}. Your login is ready.")
-        return redirect(url_for("Dashboard"))
+                flash("That login was just taken. Please choose another.")
+                return render_template(
+                    "username_taken.html", taken_username=username, suggestion=_SuggestUsername(username)
+                )
+            photo_path, photo_bytes = _SaveUpload(photo, participant.id, "photo")
+            thumbprint_path, thumbprint_bytes = _SaveUpload(thumbprint, participant.id, "thumbprint")
+            persistence.SaveParticipantProfile(
+                conn, participant.id, address, mothers_maiden_name, int(age_raw), photo_path, thumbprint_path, Now()
+            )
 
-    return render_template("self_register.html", participant=participant, token=token)
+        session.pop("pending_username", None)
+        session["participant_id"] = participant.id
+        return render_template(
+            "register_complete.html",
+            participant=participant,
+            username=username,
+            address=address,
+            mothers_maiden_name=mothers_maiden_name,
+            age=age_raw,
+            photo_data_uri=f"data:image/{_ImageMimeType(photo.filename)};base64,"
+            + base64.b64encode(photo_bytes).decode("ascii"),
+            thumbprint_data_uri=f"data:image/{_ImageMimeType(thumbprint.filename)};base64,"
+            + base64.b64encode(thumbprint_bytes).decode("ascii"),
+        )
+
+    return render_template("register.html", username=username)
 
 
 @app.route("/subsection/<name>")
@@ -438,64 +564,41 @@ def Admin():
         return guard
     now = Now()
     participants = sorted(house.participants.values(), key=lambda p: p.name)
-    has_credentials = {
-        p.id: persistence.GetCredentialsForParticipant(conn, p.id) is not None for p in participants
-    }
-    return render_template(
-        "admin.html", participants=participants, now=now, rules=house.current_rules, has_credentials=has_credentials
-    )
+    return render_template("admin.html", participants=participants, now=now, rules=house.current_rules)
 
 
-def _IssueInvite(participant_id):
-    """Mint a fresh one-time setup link for `participant_id` and flash it.
+@app.route("/admin/participant/<participant_id>")
+def AdminParticipantProfile(participant_id):
+    """The self-registration details for one Participant, for manual cross-checking.
 
-    Replaces any earlier, still-unused link for the same Participant so
-    only the most recently issued one works.
+    Compare these against whatever arrives in the mail (see Register in
+    this module and register_complete.html) — the admin never had to
+    type in a password to get here, and still can't see one.
     """
-    persistence.DeleteInvitesForParticipant(conn, participant_id)
-    token = secrets.token_urlsafe(24)
-    persistence.CreateInvite(conn, participant_id, token, Now())
-    link = url_for("SelfRegister", token=token, _external=True)
-    flash(f"Setup link (send it to them; it works once): {link}")
-
-
-@app.route("/admin/register", methods=["POST"])
-def AdminRegister():
     guard = RequireAdmin()
     if guard:
         return guard
-    name = request.form.get("name", "").strip()
-    scan_ref = request.form.get("scan_ref", "").strip()
-    if not name:
-        flash("Name is required.")
-        return redirect(url_for("Admin"))
-
-    with LOCK:
-        participant = house.RegisterParticipant(name)
-        participant.SignForm(signed_date=Now().date(), scan_ref=scan_ref)
-        persistence.SaveParticipant(conn, participant)
-        flash(f"Registered {name} with a signed form dated today.")
-        _IssueInvite(participant.id)
-    return redirect(url_for("Admin"))
-
-
-@app.route("/admin/invite", methods=["POST"])
-def AdminInvite():
-    guard = RequireAdmin()
-    if guard:
-        return guard
-    participant_id = request.form.get("participant_id")
     participant = house.participants.get(participant_id)
     if participant is None:
-        flash("Unknown Participant.")
-        return redirect(url_for("Admin"))
-    if persistence.GetCredentialsForParticipant(conn, participant_id) is not None:
-        flash(f"{participant.name} already has a login; this doesn't reset it.")
-        return redirect(url_for("Admin"))
+        abort(404)
+    profile = persistence.GetParticipantProfile(conn, participant_id)
+    return render_template("admin_participant.html", participant=participant, profile=profile)
 
-    with LOCK:
-        _IssueInvite(participant_id)
-    return redirect(url_for("Admin"))
+
+@app.route("/admin/participant/<participant_id>/<field>")
+def AdminParticipantImage(participant_id, field):
+    guard = RequireAdmin()
+    if guard:
+        return guard
+    if field not in ("photo", "thumbprint"):
+        abort(404)
+    profile = persistence.GetParticipantProfile(conn, participant_id)
+    if profile is None:
+        abort(404)
+    path = profile["photo_path"] if field == "photo" else profile["thumbprint_path"]
+    if not path or not os.path.isfile(path):
+        abort(404)
+    return send_file(path)
 
 
 @app.route("/admin/sign_form", methods=["POST"])

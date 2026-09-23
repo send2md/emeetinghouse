@@ -47,9 +47,14 @@ CREATE TABLE IF NOT EXISTS credentials (
     password_hash TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS invites (
-    token TEXT PRIMARY KEY,
-    participant_id TEXT NOT NULL REFERENCES participants(id),
+CREATE TABLE IF NOT EXISTS participant_profiles (
+    participant_id TEXT PRIMARY KEY REFERENCES participants(id),
+    address TEXT NOT NULL,
+    mothers_maiden_name TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    photo_path TEXT NOT NULL,
+    thumbprint_path TEXT NOT NULL,
+    charge_status TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL
 );
 
@@ -313,31 +318,44 @@ def GetCredentialsForParticipant(conn, participant_id: str) -> Optional[sqlite3.
     return conn.execute("SELECT * FROM credentials WHERE participant_id = ?", (participant_id,)).fetchone()
 
 
-def CreateInvite(conn, participant_id: str, token: str, created_at: dt.datetime):
-    """Record a one-time self-registration link for a Participant with no credentials yet.
+def SaveParticipantProfile(
+    conn,
+    participant_id: str,
+    address: str,
+    mothers_maiden_name: str,
+    age: int,
+    photo_path: str,
+    thumbprint_path: str,
+    created_at: dt.datetime,
+):
+    """Record the identity details a self-registering Participant supplied.
 
-    The admin hands `token` to the Participant (by the same out-of-band
-    channel their signed form arrived through); it lets them pick their
-    own username and password without the admin ever seeing it.
+    These back up the paper form they print and mail in (see app.py's
+    Register view) so the Meeting can manually cross-check a submission
+    against what arrives by mail; they aren't used by the engine itself.
     """
     conn.execute(
-        "INSERT INTO invites (token, participant_id, created_at) VALUES (?, ?, ?)",
-        (token, participant_id, _Iso(created_at)),
+        """
+        INSERT INTO participant_profiles
+            (participant_id, address, mothers_maiden_name, age, photo_path, thumbprint_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (participant_id, address, mothers_maiden_name, age, photo_path, thumbprint_path, _Iso(created_at)),
     )
     conn.commit()
 
 
-def GetInvite(conn, token: str) -> Optional[sqlite3.Row]:
-    return conn.execute("SELECT * FROM invites WHERE token = ?", (token,)).fetchone()
+def GetParticipantProfile(conn, participant_id: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM participant_profiles WHERE participant_id = ?", (participant_id,)
+    ).fetchone()
 
 
-def DeleteInvite(conn, token: str):
-    conn.execute("DELETE FROM invites WHERE token = ?", (token,))
-    conn.commit()
-
-
-def DeleteInvitesForParticipant(conn, participant_id: str):
-    conn.execute("DELETE FROM invites WHERE participant_id = ?", (participant_id,))
+def SetChargeStatus(conn, participant_id: str, status: str):
+    conn.execute(
+        "UPDATE participant_profiles SET charge_status = ? WHERE participant_id = ?",
+        (status, participant_id),
+    )
     conn.commit()
 
 

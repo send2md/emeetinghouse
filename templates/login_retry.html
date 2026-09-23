@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Hmm — Emeetinghouse{% endblock %}
+{% block content %}
+<div class="card" style="max-width:420px;margin:2rem auto;">
+  <h1>Hmm</h1>
+  <p>There's already a Participant logging in as <strong>{{ username }}</strong>, but
+    that password didn't match.</p>
+
+  <form method="post" action="{{ url_for('Login') }}">
+    <input type="hidden" name="username" value="{{ username }}">
+    <label>Password</label>
+    <input type="password" name="password" required autofocus>
+    <p><input type="submit" value="I made a mistake, try again"></p>
+  </form>
+
+  <form method="post" action="{{ url_for('LoginClaim') }}">
+    <input type="hidden" name="username" value="{{ username }}">
+    <p><input type="submit" value="This is a new login" class="secondary"></p>
+  </form>
+</div>
+{% endblock %}
