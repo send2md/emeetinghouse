@@ -82,7 +82,7 @@ def test_registration_requires_all_fields(client):
         content_type="multipart/form-data",
         follow_redirects=True,
     )
-    assert b"Full name is required" in resp.data
+    assert b"Whole real name is required" in resp.data
     assert b"at least 8 characters" in resp.data
     assert b"Age must be a whole number" in resp.data
     assert b"photo" in resp.data.lower()

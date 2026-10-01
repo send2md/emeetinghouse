@@ -4,14 +4,14 @@
 <div class="card" style="max-width:480px;margin:2rem auto;">
   <h1>{{ username }} is your login. You are a new Participant.</h1>
   <form method="post" enctype="multipart/form-data">
-    <label>Full name</label>
-    <input type="text" name="name" required autofocus>
-
     <label>Temporary password (at least 8 characters)</label>
-    <input type="password" name="password" required minlength="8">
+    <input type="password" name="password" required minlength="8" autofocus>
 
-    <p class="muted">A $1.00 registration fee normally applies here. Online payment
-      isn't wired up yet, so nothing will be charged today.</p>
+    <p class="muted">$1.00 charge paid — online payment isn't wired up yet, so nothing
+      will actually be charged today.</p>
+
+    <label>Whole real name</label>
+    <input type="text" name="name" required>
 
     <label>Address</label>
     <input type="text" name="address" required>
@@ -19,14 +19,21 @@
     <label>Mother's maiden name</label>
     <input type="text" name="mothers_maiden_name" required>
 
-    <label>Age</label>
-    <input type="number" name="age" min="0" required>
-
     <label>Thumbprint (a photo or scan of an inked thumbprint)</label>
     <input type="file" name="thumbprint" accept="image/png,image/jpeg" required>
 
     <label>Photo</label>
     <input type="file" name="photo" accept="image/png,image/jpeg" required>
+
+    <label>Age</label>
+    <input type="number" name="age" min="0" required>
+
+    <p class="muted">Please print this form and send it to:</p>
+    <address>
+      Emeetinghouse<br>
+      PO Box yyy<br>
+      San Jose, CA 95112
+    </address>
 
     <p><input type="submit" value="Register"></p>
   </form>

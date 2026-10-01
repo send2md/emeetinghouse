@@ -278,7 +278,7 @@ def Register():
 
         errors = []
         if not name:
-            errors.append("Full name is required.")
+            errors.append("Whole real name is required.")
         if len(password) < 8:
             errors.append("Password must be at least 8 characters.")
         if not address:
