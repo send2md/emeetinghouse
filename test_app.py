@@ -144,3 +144,19 @@ def test_admin_registration_routes_are_gone(client):
     _AdminLogin(test_client)
     resp = test_client.post("/admin/register", data={"name": "Someone"})
     assert resp.status_code == 404
+
+
+def test_front_page_is_a_plain_login_for_a_logged_out_visitor(client):
+    test_client, _ = client
+    resp = test_client.get("/")
+    assert resp.status_code == 200  # no redirect
+    assert b'<form method="post" action="/login">' in resp.data
+    assert b"Please log in first" not in resp.data
+
+
+def test_front_page_is_the_dashboard_once_logged_in(client):
+    test_client, _ = client
+    _Register(test_client, "janedoe")
+    resp = test_client.get("/")
+    assert b"Welcome" not in resp.data  # that flash was from registering, not a fresh "/" hit
+    assert b"Forum" in resp.data  # the logged-in nav, not the login form

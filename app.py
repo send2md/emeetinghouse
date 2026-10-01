@@ -173,9 +173,14 @@ def RequireAdmin():
 
 @app.route("/")
 def Dashboard():
-    guard = RequireLogin()
-    if guard:
-        return guard
+    """Logged-out visitors see a plain login form here, nothing else.
+
+    Unlike RequireLogin() (used by every other protected page), this
+    doesn't redirect or flash "please log in" — "/" IS the login page
+    for a logged-out visitor, not a bounce through one.
+    """
+    if g.participant is None:
+        return render_template("login.html")
     now = Now()
     open_by_subsection = {s: [] for s in Subsection}
     for topic in house.topics.values():
